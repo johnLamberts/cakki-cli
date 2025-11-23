@@ -1,175 +1,118 @@
 #!/usr/bin/env node
-
 import { execSync } from 'child_process';
 import { program } from 'commander';
 import fs from 'fs';
 import path from 'path';
 import pc from 'picocolors';
 import prompts from 'prompts';
-
-interface ProjectConfig {
-  projectName: string;
-  styleLibrary: 'shadcn' | 'mantine';
-}
-
-interface ProgramOptions {
-  shadcn?: boolean;
-  mantine?: boolean;
-}
-
-interface ProjectNameResponse {
-  projectName: string;
-}
-
-interface StyleLibraryResponse {
-  styleLibrary: 'shadcn' | 'mantine';
-}
-
-interface PackageJson {
-  name?: string;
-  version?: string;
-  scripts?: Record<string, string>;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  [key: string]: unknown;
-}
-
-export async function main(): Promise<void> {
-  console.log(pc.cyan('\n🚀 Create My Fullstack App\n'));
-
-  program
-    .version('1.0.0')
-    .argument('[project-name]', 'project name')
-    .option('-s, --shadcn', 'use shadcn/ui')
-    .option('-m, --mantine', 'use Mantine')
-    .parse(process.argv);
-
-  const options = program.opts<ProgramOptions>();
-  const args = program.args;
-
-  let projectName: string = args[0];
-  let styleLibrary: 'shadcn' | 'mantine' ;
-
-  // If no project name provided, prompt for it
-  if (!projectName) {
-    const response = await prompts<'projectName'>({
-      type: 'text',
-      name: 'projectName',
-      message: 'Project name:',
-      initial: 'my-fullstack-app',
-      validate: (value: string) => 
-        value.trim() ? true : 'Project name is required'
-    });
-
-    if (!response.projectName) {
-      console.log(pc.red('\n✖ Operation cancelled'));
-      process.exit(0);
+export async function main() {
+    console.log(pc.cyan('\n🚀 Create My Fullstack App\n'));
+    program
+        .version('1.0.0')
+        .argument('[project-name]', 'project name')
+        .option('-s, --shadcn', 'use shadcn/ui')
+        .option('-m, --mantine', 'use Mantine')
+        .parse(process.argv);
+    const options = program.opts();
+    const args = program.args;
+    let projectName = args[0];
+    let styleLibrary;
+    // If no project name provided, prompt for it
+    if (!projectName) {
+        const response = await prompts({
+            type: 'text',
+            name: 'projectName',
+            message: 'Project name:',
+            initial: 'my-fullstack-app',
+            validate: (value) => value.trim() ? true : 'Project name is required'
+        });
+        if (!response.projectName) {
+            console.log(pc.red('\n✖ Operation cancelled'));
+            process.exit(0);
+        }
+        projectName = response.projectName;
     }
-
-    projectName = response.projectName;
-  }
-
-  // If no style library specified, prompt for it
-  if (!options.shadcn && !options.mantine) {
-    const response = await prompts<'styleLibrary'>({
-      type: 'select',
-      name: 'styleLibrary',
-      message: 'Choose styling library:',
-      choices: [
-        { title: 'shadcn/ui', value: 'shadcn' as const },
-        { title: 'Mantine', value: 'mantine' as const }
-      ]
-    });
-
-    if (!response.styleLibrary) {
-      console.log(pc.red('\n✖ Operation cancelled'));
-      process.exit(0);
+    // If no style library specified, prompt for it
+    if (!options.shadcn && !options.mantine) {
+        const response = await prompts({
+            type: 'select',
+            name: 'styleLibrary',
+            message: 'Choose styling library:',
+            choices: [
+                { title: 'shadcn/ui', value: 'shadcn' },
+                { title: 'Mantine', value: 'mantine' }
+            ]
+        });
+        if (!response.styleLibrary) {
+            console.log(pc.red('\n✖ Operation cancelled'));
+            process.exit(0);
+        }
+        styleLibrary = response.styleLibrary;
     }
-
-    styleLibrary = response.styleLibrary;
-  } else {
-    styleLibrary = options.shadcn ? 'shadcn' : 'mantine';
-  }
-
-  const config: ProjectConfig = {
-    projectName,
-    styleLibrary
-  };
-
-  await createProject(config);
+    else {
+        styleLibrary = options.shadcn ? 'shadcn' : 'mantine';
+    }
+    const config = {
+        projectName,
+        styleLibrary
+    };
+    await createProject(config);
 }
-
-async function createProject(config: ProjectConfig): Promise<void> {
-  const { projectName, styleLibrary } = config;
-  const projectPath = path.join(process.cwd(), projectName);
-
-  if (fs.existsSync(projectPath)) {
-    console.error(pc.red(`\n✖ Directory ${projectName} already exists!`));
-    process.exit(1);
-  }
-
-  console.log(pc.green(`\n📁 Creating project at ${projectPath}...`));
-  fs.mkdirSync(projectPath);
-
-  // Create frontend
-  console.log(pc.blue('\n📦 Setting up frontend...'));
-  execSync('npm create vite@latest client -- --template react-ts', {
-    cwd: projectPath,
-    stdio: 'inherit'
-  });
-
-  const clientPath = path.join(projectPath, 'client');
-
-  // Update client package.json for testing
-  const clientPackageJsonPath = path.join(clientPath, 'package.json');
-  const clientPackageJson = JSON.parse(
-    fs.readFileSync(clientPackageJsonPath, 'utf8')
-  ) as PackageJson;
-
-  clientPackageJson.scripts = {
-    ...clientPackageJson.scripts,
-    test: 'vitest',
-    'test:ui': 'vitest --ui',
-    'test:coverage': 'vitest --coverage'
-  };
-
-  clientPackageJson.devDependencies = {
-    ...clientPackageJson.devDependencies,
-    '@testing-library/react': '^14.1.2',
-    '@testing-library/jest-dom': '^6.1.5',
-    '@testing-library/user-event': '^14.5.1',
-    '@vitest/ui': '^1.0.4',
-    '@vitest/coverage-v8': '^1.0.4',
-    jsdom: '^23.0.1',
-    vitest: '^1.0.4'
-  };
-
-  fs.writeFileSync(
-    clientPackageJsonPath,
-    JSON.stringify(clientPackageJson, null, 2)
-  );
-
-  // Create client directory structure
-  const clientSrcPath = path.join(clientPath, 'src');
-  const clientDirs: string[] = [
-    'components/ui',
-    'components/features',
-    'components/layout',
-    'hooks',
-    'services',
-    'utils',
-    'types',
-    'stores',
-    'constants',
-    'test'
-  ];
-
-  clientDirs.forEach((dir: string) => {
-    fs.mkdirSync(path.join(clientSrcPath, dir), { recursive: true });
-  });
-
-  // Create vitest config for client with path aliases
-  const vitestConfigClient = `import { defineConfig } from 'vitest/config';
+async function createProject(config) {
+    const { projectName, styleLibrary } = config;
+    const projectPath = path.join(process.cwd(), projectName);
+    if (fs.existsSync(projectPath)) {
+        console.error(pc.red(`\n✖ Directory ${projectName} already exists!`));
+        process.exit(1);
+    }
+    console.log(pc.green(`\n📁 Creating project at ${projectPath}...`));
+    fs.mkdirSync(projectPath);
+    // Create frontend
+    console.log(pc.blue('\n📦 Setting up frontend...'));
+    execSync('npm create vite@latest client -- --template react-ts', {
+        cwd: projectPath,
+        stdio: 'inherit'
+    });
+    const clientPath = path.join(projectPath, 'client');
+    // Update client package.json for testing
+    const clientPackageJsonPath = path.join(clientPath, 'package.json');
+    const clientPackageJson = JSON.parse(fs.readFileSync(clientPackageJsonPath, 'utf8'));
+    clientPackageJson.scripts = {
+        ...clientPackageJson.scripts,
+        test: 'vitest',
+        'test:ui': 'vitest --ui',
+        'test:coverage': 'vitest --coverage'
+    };
+    clientPackageJson.devDependencies = {
+        ...clientPackageJson.devDependencies,
+        '@testing-library/react': '^14.1.2',
+        '@testing-library/jest-dom': '^6.1.5',
+        '@testing-library/user-event': '^14.5.1',
+        '@vitest/ui': '^1.0.4',
+        '@vitest/coverage-v8': '^1.0.4',
+        jsdom: '^23.0.1',
+        vitest: '^1.0.4'
+    };
+    fs.writeFileSync(clientPackageJsonPath, JSON.stringify(clientPackageJson, null, 2));
+    // Create client directory structure
+    const clientSrcPath = path.join(clientPath, 'src');
+    const clientDirs = [
+        'components/ui',
+        'components/features',
+        'components/layout',
+        'hooks',
+        'services',
+        'utils',
+        'types',
+        'stores',
+        'constants',
+        'test'
+    ];
+    clientDirs.forEach((dir) => {
+        fs.mkdirSync(path.join(clientSrcPath, dir), { recursive: true });
+    });
+    // Create vitest config for client with path aliases
+    const vitestConfigClient = `import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
@@ -201,14 +144,9 @@ export default defineConfig({
   },
 });
 `;
-
-  fs.writeFileSync(
-    path.join(clientPath, 'vitest.config.ts'),
-    vitestConfigClient
-  );
-
-  // Update vite.config.ts with path aliases
-  const viteConfig = `import { defineConfig } from 'vite'
+    fs.writeFileSync(path.join(clientPath, 'vitest.config.ts'), vitestConfigClient);
+    // Update vite.config.ts with path aliases
+    const viteConfig = `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
@@ -238,45 +176,29 @@ export default defineConfig({
   },
 })
 `;
-
-  fs.writeFileSync(path.join(clientPath, 'vite.config.ts'), viteConfig);
-
-  // Update tsconfig.json with path aliases
-  const clientTsConfigPath = path.join(clientPath, 'tsconfig.json');
-  if (fs.existsSync(clientTsConfigPath)) {
-    const clientTsConfig = JSON.parse(
-      fs.readFileSync(clientTsConfigPath, 'utf8')
-    ) as {
-      compilerOptions?: {
-        baseUrl?: string;
-        paths?: Record<string, string[]>;
-        [key: string]: unknown;
-      };
-      [key: string]: unknown;
-    };
-    
-    clientTsConfig.compilerOptions = {
-      ...clientTsConfig.compilerOptions,
-      baseUrl: '.',
-      paths: {
-        '@/*': ['src/*'],
-        '@components/*': ['src/components/*'],
-        '@hooks/*': ['src/hooks/*'],
-        '@services/*': ['src/services/*'],
-        '@utils/*': ['src/utils/*'],
-        '@types/*': ['src/types/*'],
-        '@stores/*': ['src/stores/*'],
-        '@constants/*': ['src/constants/*']
-      }
-    };
-    fs.writeFileSync(
-      clientTsConfigPath,
-      JSON.stringify(clientTsConfig, null, 2)
-    );
-  }
-
-  // Create types
-  const apiTypes = `export interface ApiResponse<T = any> {
+    fs.writeFileSync(path.join(clientPath, 'vite.config.ts'), viteConfig);
+    // Update tsconfig.json with path aliases
+    const clientTsConfigPath = path.join(clientPath, 'tsconfig.json');
+    if (fs.existsSync(clientTsConfigPath)) {
+        const clientTsConfig = JSON.parse(fs.readFileSync(clientTsConfigPath, 'utf8'));
+        clientTsConfig.compilerOptions = {
+            ...clientTsConfig.compilerOptions,
+            baseUrl: '.',
+            paths: {
+                '@/*': ['src/*'],
+                '@components/*': ['src/components/*'],
+                '@hooks/*': ['src/hooks/*'],
+                '@services/*': ['src/services/*'],
+                '@utils/*': ['src/utils/*'],
+                '@types/*': ['src/types/*'],
+                '@stores/*': ['src/stores/*'],
+                '@constants/*': ['src/constants/*']
+            }
+        };
+        fs.writeFileSync(clientTsConfigPath, JSON.stringify(clientTsConfig, null, 2));
+    }
+    // Create types
+    const apiTypes = `export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;
@@ -291,11 +213,9 @@ export interface User {
   updatedAt: string;
 }
 `;
-
-  fs.writeFileSync(path.join(clientSrcPath, 'types', 'index.ts'), apiTypes);
-
-  // Create API service
-  const apiService = `import { ApiResponse } from '@types/index';
+    fs.writeFileSync(path.join(clientSrcPath, 'types', 'index.ts'), apiTypes);
+    // Create API service
+    const apiService = `import { ApiResponse } from '@types/index';
 
 class ApiService {
   private baseURL: string;
@@ -355,14 +275,9 @@ class ApiService {
 
 export const apiService = new ApiService();
 `;
-
-  fs.writeFileSync(
-    path.join(clientSrcPath, 'services', 'api.service.ts'),
-    apiService
-  );
-
-  // Create user service
-  const userService = `import { apiService } from './api.service';
+    fs.writeFileSync(path.join(clientSrcPath, 'services', 'api.service.ts'), apiService);
+    // Create user service
+    const userService = `import { apiService } from './api.service';
 import { User } from '@types/index';
 
 class UserService {
@@ -389,14 +304,9 @@ class UserService {
 
 export const userService = new UserService();
 `;
-
-  fs.writeFileSync(
-    path.join(clientSrcPath, 'services', 'user.service.ts'),
-    userService
-  );
-
-  // Create custom hooks
-  const useApiHook = `import { useState, useEffect } from 'react';
+    fs.writeFileSync(path.join(clientSrcPath, 'services', 'user.service.ts'), userService);
+    // Create custom hooks
+    const useApiHook = `import { useState, useEffect } from 'react';
 import { ApiResponse } from '@types/index';
 
 interface UseApiState<T> {
@@ -451,11 +361,9 @@ export function useApi<T>(
   return state;
 }
 `;
-
-  fs.writeFileSync(path.join(clientSrcPath, 'hooks', 'useApi.ts'), useApiHook);
-
-  // Create constants
-  const constants = `export const API_ENDPOINTS = {
+    fs.writeFileSync(path.join(clientSrcPath, 'hooks', 'useApi.ts'), useApiHook);
+    // Create constants
+    const constants = `export const API_ENDPOINTS = {
   USERS: '/users',
   HEALTH: '/health',
 } as const;
@@ -465,14 +373,9 @@ export const APP_CONFIG = {
   VERSION: '1.0.0',
 } as const;
 `;
-
-  fs.writeFileSync(
-    path.join(clientSrcPath, 'constants', 'index.ts'),
-    constants
-  );
-
-  // Create example feature component
-  const userList = `import { useApi } from '@hooks/useApi';
+    fs.writeFileSync(path.join(clientSrcPath, 'constants', 'index.ts'), constants);
+    // Create example feature component
+    const userList = `import { useApi } from '@hooks/useApi';
 import { userService } from '@services/user.service';
 import { User } from '@types/index';
 
@@ -500,14 +403,9 @@ export function UserList() {
   );
 }
 `;
-
-  fs.writeFileSync(
-    path.join(clientSrcPath, 'components/features', 'UserList.tsx'),
-    userList
-  );
-
-  // Create layout component
-  const layout = `import { ReactNode } from 'react';
+    fs.writeFileSync(path.join(clientSrcPath, 'components/features', 'UserList.tsx'), userList);
+    // Create layout component
+    const layout = `import { ReactNode } from 'react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -528,14 +426,9 @@ export function Layout({ children }: LayoutProps) {
   );
 }
 `;
-
-  fs.writeFileSync(
-    path.join(clientSrcPath, 'components/layout', 'Layout.tsx'),
-    layout
-  );
-
-  // Create utility functions
-  const formatters = `export function formatDate(date: string | Date): string {
+    fs.writeFileSync(path.join(clientSrcPath, 'components/layout', 'Layout.tsx'), layout);
+    // Create utility functions
+    const formatters = `export function formatDate(date: string | Date): string {
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -550,30 +443,20 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount);
 }
 `;
-
-  fs.writeFileSync(
-    path.join(clientSrcPath, 'utils', 'formatters.ts'),
-    formatters
-  );
-
-  // Create .env files
-  const clientEnv = `VITE_API_URL=http://localhost:3000/api
+    fs.writeFileSync(path.join(clientSrcPath, 'utils', 'formatters.ts'), formatters);
+    // Create .env files
+    const clientEnv = `VITE_API_URL=http://localhost:3000/api
 `;
-
-  fs.writeFileSync(path.join(clientPath, '.env'), clientEnv);
-  fs.writeFileSync(path.join(clientPath, '.env.example'), clientEnv);
-
-  // Create test setup
-  const clientTestPath = path.join(clientPath, 'src', 'test');
-  fs.mkdirSync(clientTestPath, { recursive: true });
-
-  const testSetup = `import '@testing-library/jest-dom';
+    fs.writeFileSync(path.join(clientPath, '.env'), clientEnv);
+    fs.writeFileSync(path.join(clientPath, '.env.example'), clientEnv);
+    // Create test setup
+    const clientTestPath = path.join(clientPath, 'src', 'test');
+    fs.mkdirSync(clientTestPath, { recursive: true });
+    const testSetup = `import '@testing-library/jest-dom';
 `;
-
-  fs.writeFileSync(path.join(clientTestPath, 'setup.ts'), testSetup);
-
-  // Create example test
-  const exampleTest = `import { render, screen } from '@testing-library/react';
+    fs.writeFileSync(path.join(clientTestPath, 'setup.ts'), testSetup);
+    // Create example test
+    const exampleTest = `import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from '../App';
 
@@ -584,114 +467,97 @@ describe('App', () => {
   });
 });
 `;
-
-  fs.writeFileSync(path.join(clientTestPath, 'App.test.tsx'), exampleTest);
-
-  // Create backend
-  console.log(pc.blue('\n📦 Setting up backend...'));
-  const serverPath = path.join(projectPath, 'server');
-  fs.mkdirSync(serverPath);
-
-  // Backend package.json
-  const serverPackageJson: PackageJson = {
-    name: `${projectName}-server`,
-    version: '1.0.0',
-    type: 'module',
-    scripts: {
-      dev: 'tsx watch src/index.ts',
-      build: 'rolldown',
-      start: 'node dist/index.js',
-      test: 'vitest',
-      'test:ui': 'vitest --ui',
-      'test:coverage': 'vitest --coverage'
-    },
-    dependencies: {
-      express: '^4.18.2',
-      cors: '^2.8.5',
-      dotenv: '^16.3.1',
-      '@cakki/orm': 'latest',
-      'reflect-metadata': '^0.2.1',
-      picocolors: '^1.0.0'
-    },
-    devDependencies: {
-      '@types/express': '^4.17.21',
-      '@types/cors': '^2.8.17',
-      '@types/node': '^20.10.0',
-      '@types/supertest': '^6.0.2',
-      typescript: '^5.3.3',
-      tsx: '^4.7.0',
-      rolldown: '^0.15.1',
-      vitest: '^1.0.4',
-      supertest: '^6.3.3',
-      '@vitest/coverage-v8': '^1.0.4'
+    fs.writeFileSync(path.join(clientTestPath, 'App.test.tsx'), exampleTest);
+    // Create backend
+    console.log(pc.blue('\n📦 Setting up backend...'));
+    const serverPath = path.join(projectPath, 'server');
+    fs.mkdirSync(serverPath);
+    // Backend package.json
+    const serverPackageJson = {
+        name: `${projectName}-server`,
+        version: '1.0.0',
+        type: 'module',
+        scripts: {
+            dev: 'tsx watch src/index.ts',
+            build: 'rolldown',
+            start: 'node dist/index.js',
+            test: 'vitest',
+            'test:ui': 'vitest --ui',
+            'test:coverage': 'vitest --coverage'
+        },
+        dependencies: {
+            express: '^4.18.2',
+            cors: '^2.8.5',
+            dotenv: '^16.3.1',
+            '@cakki/orm': 'latest',
+            'reflect-metadata': '^0.2.1',
+            picocolors: '^1.0.0'
+        },
+        devDependencies: {
+            '@types/express': '^4.17.21',
+            '@types/cors': '^2.8.17',
+            '@types/node': '^20.10.0',
+            '@types/supertest': '^6.0.2',
+            typescript: '^5.3.3',
+            tsx: '^4.7.0',
+            rolldown: '^0.15.1',
+            vitest: '^1.0.4',
+            supertest: '^6.3.3',
+            '@vitest/coverage-v8': '^1.0.4'
+        }
+    };
+    fs.writeFileSync(path.join(serverPath, 'package.json'), JSON.stringify(serverPackageJson, null, 2));
+    // Create all other files (server config, tests, root configs, etc.)
+    createServerFiles(serverPath);
+    createRootFiles(projectPath, projectName, styleLibrary);
+    console.log(pc.green('\n✅ Project created successfully!'));
+    console.log(pc.cyan('\n📂 Next steps:'));
+    console.log(`   ${pc.bold('cd ' + projectName)}`);
+    console.log(`   ${pc.bold('npm run install:all')}`);
+    console.log(`   ${pc.bold('npm run prepare')}          # Setup Git hooks`);
+    if (styleLibrary === 'shadcn') {
+        console.log(`   ${pc.bold('cd client && npx shadcn@latest init && cd ..')}`);
     }
-  };
-
-  fs.writeFileSync(
-    path.join(serverPath, 'package.json'),
-    JSON.stringify(serverPackageJson, null, 2)
-  );
-
-  // Create all other files (server config, tests, root configs, etc.)
-  createServerFiles(serverPath);
-  createRootFiles(projectPath, projectName, styleLibrary);
-
-  console.log(pc.green('\n✅ Project created successfully!'));
-  console.log(pc.cyan('\n📂 Next steps:'));
-  console.log(`   ${pc.bold('cd ' + projectName)}`);
-  console.log(`   ${pc.bold('npm run install:all')}`);
-  console.log(`   ${pc.bold('npm run prepare')}          # Setup Git hooks`);
-  if (styleLibrary === 'shadcn') {
-    console.log(
-      `   ${pc.bold('cd client && npx shadcn@latest init && cd ..')}`
-    );
-  }
-  console.log(`   ${pc.bold('npm run dev')}`);
-  console.log(pc.cyan('\n🧪 Run tests:'));
-  console.log(`   ${pc.bold('npm test')}`);
-  console.log(pc.cyan('\n📋 Enterprise features included:'));
-  console.log(`   ${pc.green('✓')} ESLint & Prettier configured`);
-  console.log(`   ${pc.green('✓')} Husky pre-commit hooks`);
-  console.log(`   ${pc.green('✓')} GitHub Actions CI/CD`);
-  console.log(`   ${pc.green('✓')} VSCode workspace settings`);
-  console.log(`   ${pc.green('✓')} Dependabot auto-updates`);
+    console.log(`   ${pc.bold('npm run dev')}`);
+    console.log(pc.cyan('\n🧪 Run tests:'));
+    console.log(`   ${pc.bold('npm test')}`);
+    console.log(pc.cyan('\n📋 Enterprise features included:'));
+    console.log(`   ${pc.green('✓')} ESLint & Prettier configured`);
+    console.log(`   ${pc.green('✓')} Husky pre-commit hooks`);
+    console.log(`   ${pc.green('✓')} GitHub Actions CI/CD`);
+    console.log(`   ${pc.green('✓')} VSCode workspace settings`);
+    console.log(`   ${pc.green('✓')} Dependabot auto-updates`);
 }
-
-function createServerFiles(serverPath: string): void {
-  // Backend tsconfig.json with decorators support
-  const serverTsConfig = {
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'bundler',
-      outDir: './dist',
-      rootDir: './src',
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      forceConsistentCasingInFileNames: true,
-      resolveJsonModule: true,
-      experimentalDecorators: true,
-      emitDecoratorMetadata: true,
-      types: ['vitest/globals', 'node'],
-      baseUrl: '.',
-      paths: {
-        '@/*': ['src/*'],
-        '@modules/*': ['src/modules/*'],
-        '@shared/*': ['src/shared/*']
-      }
-    },
-    include: ['src/**/*'],
-    exclude: ['node_modules', 'dist']
-  };
-
-  fs.writeFileSync(
-    path.join(serverPath, 'tsconfig.json'),
-    JSON.stringify(serverTsConfig, null, 2)
-  );
-
-  // Rolldown config
-  const rolldownConfig = `import { defineConfig } from 'rolldown';
+function createServerFiles(serverPath) {
+    // Backend tsconfig.json with decorators support
+    const serverTsConfig = {
+        compilerOptions: {
+            target: 'ES2022',
+            module: 'ESNext',
+            moduleResolution: 'bundler',
+            outDir: './dist',
+            rootDir: './src',
+            strict: true,
+            esModuleInterop: true,
+            skipLibCheck: true,
+            forceConsistentCasingInFileNames: true,
+            resolveJsonModule: true,
+            experimentalDecorators: true,
+            emitDecoratorMetadata: true,
+            types: ['vitest/globals', 'node'],
+            baseUrl: '.',
+            paths: {
+                '@/*': ['src/*'],
+                '@modules/*': ['src/modules/*'],
+                '@shared/*': ['src/shared/*']
+            }
+        },
+        include: ['src/**/*'],
+        exclude: ['node_modules', 'dist']
+    };
+    fs.writeFileSync(path.join(serverPath, 'tsconfig.json'), JSON.stringify(serverTsConfig, null, 2));
+    // Rolldown config
+    const rolldownConfig = `import { defineConfig } from 'rolldown';
 
 export default defineConfig({
   input: './src/index.ts',
@@ -703,14 +569,9 @@ export default defineConfig({
   platform: 'node',
 });
 `;
-
-  fs.writeFileSync(
-    path.join(serverPath, 'rolldown.config.js'),
-    rolldownConfig
-  );
-
-  // Vitest config
-  const vitestConfigServer = `import { defineConfig } from 'vitest/config';
+    fs.writeFileSync(path.join(serverPath, 'rolldown.config.js'), rolldownConfig);
+    // Vitest config
+    const vitestConfigServer = `import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
@@ -731,30 +592,23 @@ export default defineConfig({
   }
 });
 `;
-
-  fs.writeFileSync(
-    path.join(serverPath, 'vitest.config.ts'),
-    vitestConfigServer
-  );
-
-  // Create modular directory structure
-  const serverSrcPath = path.join(serverPath, 'src');
-  const dirs: string[] = [
-    'modules/user',
-    'modules/health',
-    'shared/config',
-    'shared/utils',
-    'shared/middlewares',
-    'shared/types',
-    'shared/interfaces'
-  ];
-
-  dirs.forEach((dir: string) => {
-    fs.mkdirSync(path.join(serverSrcPath, dir), { recursive: true });
-  });
-
-  // Create shared types
-  const sharedTypes = `export interface ApiResponse<T = any> {
+    fs.writeFileSync(path.join(serverPath, 'vitest.config.ts'), vitestConfigServer);
+    // Create modular directory structure
+    const serverSrcPath = path.join(serverPath, 'src');
+    const dirs = [
+        'modules/user',
+        'modules/health',
+        'shared/config',
+        'shared/utils',
+        'shared/middlewares',
+        'shared/types',
+        'shared/interfaces'
+    ];
+    dirs.forEach((dir) => {
+        fs.mkdirSync(path.join(serverSrcPath, dir), { recursive: true });
+    });
+    // Create shared types
+    const sharedTypes = `export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;
@@ -770,14 +624,9 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   };
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'shared/types', 'index.ts'),
-    sharedTypes
-  );
-
-  // Create shared interfaces
-  const sharedInterfaces = `export interface IService<T> {
+    fs.writeFileSync(path.join(serverSrcPath, 'shared/types', 'index.ts'), sharedTypes);
+    // Create shared interfaces
+    const sharedInterfaces = `export interface IService<T> {
   findAll(): Promise<T[]>;
   findById(id: string): Promise<T | null>;
   create(data: Partial<T>): Promise<T>;
@@ -797,14 +646,9 @@ export interface IController {
   setupRoutes(): void;
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'shared/interfaces', 'index.ts'),
-    sharedInterfaces
-  );
-
-  // Create config
-  const appConfig = `import dotenv from 'dotenv';
+    fs.writeFileSync(path.join(serverSrcPath, 'shared/interfaces', 'index.ts'), sharedInterfaces);
+    // Create config
+    const appConfig = `import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -828,14 +672,9 @@ export const isDevelopment = config.nodeEnv === 'development';
 export const isProduction = config.nodeEnv === 'production';
 export const isTest = config.nodeEnv === 'test';
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'shared/config', 'index.ts'),
-    appConfig
-  );
-
-  // Create logger utility
-  const logger = `import pc from 'picocolors';
+    fs.writeFileSync(path.join(serverSrcPath, 'shared/config', 'index.ts'), appConfig);
+    // Create logger utility
+    const logger = `import pc from 'picocolors';
 
 export class Logger {
   private context: string;
@@ -867,14 +706,9 @@ export class Logger {
   }
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'shared/utils', 'logger.ts'),
-    logger
-  );
-
-  // Create error handler utility
-  const errorHandler = `import { Request, Response, NextFunction } from 'express';
+    fs.writeFileSync(path.join(serverSrcPath, 'shared/utils', 'logger.ts'), logger);
+    // Create error handler utility
+    const errorHandler = `import { Request, Response, NextFunction } from 'express';
 import { Logger } from './logger';
 
 const logger = new Logger('ErrorHandler');
@@ -921,14 +755,9 @@ export const asyncHandler = (
   };
 };
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'shared/utils', 'error-handler.ts'),
-    errorHandler
-  );
-
-  // Create validation middleware
-  const validationMiddleware = `import { Request, Response, NextFunction } from 'express';
+    fs.writeFileSync(path.join(serverSrcPath, 'shared/utils', 'error-handler.ts'), errorHandler);
+    // Create validation middleware
+    const validationMiddleware = `import { Request, Response, NextFunction } from 'express';
 import { AppError } from '@shared/utils/error-handler';
 
 export const validateRequest = (schema: any) => {
@@ -938,15 +767,10 @@ export const validateRequest = (schema: any) => {
   };
 };
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'shared/middlewares', 'validation.middleware.ts'),
-    validationMiddleware
-  );
-
-  // ========== USER MODULE ==========
-  // User model
-  const userModel = `export interface User {
+    fs.writeFileSync(path.join(serverSrcPath, 'shared/middlewares', 'validation.middleware.ts'), validationMiddleware);
+    // ========== USER MODULE ==========
+    // User model
+    const userModel = `export interface User {
   id: string;
   email: string;
   name: string;
@@ -965,14 +789,9 @@ export interface UpdateUserDto {
   name?: string;
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/user', 'user.model.ts'),
-    userModel
-  );
-
-  // User repository
-  const userRepository = `import { IRepository } from '@shared/interfaces';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/user', 'user.model.ts'), userModel);
+    // User repository
+    const userRepository = `import { IRepository } from '@shared/interfaces';
 import { User } from './user.model';
 import { Logger } from '@shared/utils/logger';
 
@@ -1016,14 +835,9 @@ export class UserRepository implements IRepository<User> {
   }
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/user', 'user.repository.ts'),
-    userRepository
-  );
-
-  // User service
-  const userService = `import { IService } from '@shared/interfaces';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/user', 'user.repository.ts'), userRepository);
+    // User service
+    const userService = `import { IService } from '@shared/interfaces';
 import { User, CreateUserDto, UpdateUserDto } from './user.model';
 import { UserRepository } from './user.repository';
 import { AppError } from '@shared/utils/error-handler';
@@ -1105,14 +919,9 @@ export class UserService implements IService<User> {
   }
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/user', 'user.service.ts'),
-    userService
-  );
-
-  // User controller
-  const userController = `import { Request, Response } from 'express';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/user', 'user.service.ts'), userService);
+    // User controller
+    const userController = `import { Request, Response } from 'express';
 import { UserService } from './user.service';
 import { asyncHandler } from '@shared/utils/error-handler';
 import { ApiResponse } from '@shared/types';
@@ -1187,14 +996,9 @@ export class UserController {
   });
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/user', 'user.controller.ts'),
-    userController
-  );
-
-  // User routes
-  const userRoutes = `import { Router } from 'express';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/user', 'user.controller.ts'), userController);
+    // User routes
+    const userRoutes = `import { Router } from 'express';
 import { UserController } from './user.controller';
 
 export class UserRoutes {
@@ -1216,30 +1020,19 @@ export class UserRoutes {
   }
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/user', 'user.routes.ts'),
-    userRoutes
-  );
-
-  // User module index
-  const userIndex = `export * from './user.model';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/user', 'user.routes.ts'), userRoutes);
+    // User module index
+    const userIndex = `export * from './user.model';
 export * from './user.repository';
 export * from './user.service';
 export * from './user.controller';
 export * from './user.routes';
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/user', 'index.ts'),
-    userIndex
-  );
-
-  // User tests
-  const userTestDir = path.join(serverSrcPath, 'modules/user', '__tests__');
-  fs.mkdirSync(userTestDir, { recursive: true });
-
-  const userServiceTest = `import { describe, it, expect, beforeEach, vi } from 'vitest';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/user', 'index.ts'), userIndex);
+    // User tests
+    const userTestDir = path.join(serverSrcPath, 'modules/user', '__tests__');
+    fs.mkdirSync(userTestDir, { recursive: true });
+    const userServiceTest = `import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UserService } from '../user.service';
 import { UserRepository } from '../user.repository';
 
@@ -1262,13 +1055,8 @@ describe('UserService', () => {
   });
 });
 `;
-
-  fs.writeFileSync(
-    path.join(userTestDir, 'user.service.test.ts'),
-    userServiceTest
-  );
-
-  const userIntegrationTest = `import { describe, it, expect } from 'vitest';
+    fs.writeFileSync(path.join(userTestDir, 'user.service.test.ts'), userServiceTest);
+    const userIntegrationTest = `import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../../app';
 
@@ -1285,14 +1073,9 @@ describe('User API Integration Tests', () => {
   // TODO: Add more integration tests
 });
 `;
-
-  fs.writeFileSync(
-    path.join(userTestDir, 'user.integration.test.ts'),
-    userIntegrationTest
-  );
-
-  // ========== HEALTH MODULE ==========
-  const healthController = `import { Request, Response } from 'express';
+    fs.writeFileSync(path.join(userTestDir, 'user.integration.test.ts'), userIntegrationTest);
+    // ========== HEALTH MODULE ==========
+    const healthController = `import { Request, Response } from 'express';
 import { asyncHandler } from '@shared/utils/error-handler';
 
 export class HealthController {
@@ -1309,13 +1092,8 @@ export class HealthController {
   });
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/health', 'health.controller.ts'),
-    healthController
-  );
-
-  const healthRoutes = `import { Router } from 'express';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/health', 'health.controller.ts'), healthController);
+    const healthRoutes = `import { Router } from 'express';
 import { HealthController } from './health.controller';
 
 export class HealthRoutes {
@@ -1333,24 +1111,14 @@ export class HealthRoutes {
   }
 }
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/health', 'health.routes.ts'),
-    healthRoutes
-  );
-
-  const healthIndex = `export * from './health.controller';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/health', 'health.routes.ts'), healthRoutes);
+    const healthIndex = `export * from './health.controller';
 export * from './health.routes';
 `;
-
-  fs.writeFileSync(
-    path.join(serverSrcPath, 'modules/health', 'index.ts'),
-    healthIndex
-  );
-
-  // ========== APP SETUP ==========
-  // Create app.ts
-  const appTs = `import express, { Application } from 'express';
+    fs.writeFileSync(path.join(serverSrcPath, 'modules/health', 'index.ts'), healthIndex);
+    // ========== APP SETUP ==========
+    // Create app.ts
+    const appTs = `import express, { Application } from 'express';
 import cors from 'cors';
 import { config } from '@shared/config';
 import { errorHandler } from '@shared/utils/error-handler';
@@ -1389,11 +1157,9 @@ export const createApp = (): Application => {
   return app;
 };
 `;
-
-  fs.writeFileSync(path.join(serverSrcPath, 'app.ts'), appTs);
-
-  // Create main index.ts
-  const serverIndex = `import 'reflect-metadata';
+    fs.writeFileSync(path.join(serverSrcPath, 'app.ts'), appTs);
+    // Create main index.ts
+    const serverIndex = `import 'reflect-metadata';
 import { createApp } from './app';
 import { config } from '@shared/config';
 import { Logger } from '@shared/utils/logger';
@@ -1412,64 +1178,50 @@ if (config.nodeEnv !== 'test') {
 
 export { app };
 `;
-
-  fs.writeFileSync(path.join(serverSrcPath, 'index.ts'), serverIndex);
-
-  // .env
-  const serverEnv = `PORT=3000
+    fs.writeFileSync(path.join(serverSrcPath, 'index.ts'), serverIndex);
+    // .env
+    const serverEnv = `PORT=3000
 NODE_ENV=development
 DATABASE_URL=your_database_url_here
 CORS_ORIGIN=http://localhost:5173
 JWT_SECRET=your-jwt-secret-key-change-in-production
 JWT_EXPIRES_IN=7d
 `;
-
-  fs.writeFileSync(path.join(serverPath, '.env'), serverEnv);
-  fs.writeFileSync(path.join(serverPath, '.env.example'), serverEnv);
+    fs.writeFileSync(path.join(serverPath, '.env'), serverEnv);
+    fs.writeFileSync(path.join(serverPath, '.env.example'), serverEnv);
 }
-
-function createRootFiles(
-  projectPath: string,
-  projectName: string,
-  styleLibrary: 'shadcn' | 'mantine'
-): void {
-  // Root package.json
-  const rootPackageJson: PackageJson = {
-    name: projectName,
-    version: '1.0.0',
-    private: true,
-    scripts: {
-      'dev:client': 'cd client && npm run dev',
-      'dev:server': 'cd server && npm run dev',
-      dev: 'concurrently "npm run dev:server" "npm run dev:client"',
-      'test:client': 'cd client && npm test',
-      'test:server': 'cd server && npm test',
-      test: 'npm run test:server && npm run test:client',
-      'install:all':
-        'npm install && cd client && npm install && cd ../server && npm install',
-      lint: 'eslint . --ext .ts,.tsx',
-      'lint:fix': 'eslint . --ext .ts,.tsx --fix',
-      format: 'prettier --write "**/*.{ts,tsx,json,md}"',
-      prepare: 'husky install'
-    },
-    devDependencies: {
-      concurrently: '^8.2.2',
-      '@typescript-eslint/eslint-plugin': '^6.21.0',
-      '@typescript-eslint/parser': '^6.21.0',
-      eslint: '^8.56.0',
-      prettier: '^3.2.4',
-      husky: '^8.0.3',
-      'lint-staged': '^15.2.0'
-    }
-  };
-
-  fs.writeFileSync(
-    path.join(projectPath, 'package.json'),
-    JSON.stringify(rootPackageJson, null, 2)
-  );
-
-  // .gitignore
-  const gitignore = `# Dependencies
+function createRootFiles(projectPath, projectName, styleLibrary) {
+    // Root package.json
+    const rootPackageJson = {
+        name: projectName,
+        version: '1.0.0',
+        private: true,
+        scripts: {
+            'dev:client': 'cd client && npm run dev',
+            'dev:server': 'cd server && npm run dev',
+            dev: 'concurrently "npm run dev:server" "npm run dev:client"',
+            'test:client': 'cd client && npm test',
+            'test:server': 'cd server && npm test',
+            test: 'npm run test:server && npm run test:client',
+            'install:all': 'npm install && cd client && npm install && cd ../server && npm install',
+            lint: 'eslint . --ext .ts,.tsx',
+            'lint:fix': 'eslint . --ext .ts,.tsx --fix',
+            format: 'prettier --write "**/*.{ts,tsx,json,md}"',
+            prepare: 'husky install'
+        },
+        devDependencies: {
+            concurrently: '^8.2.2',
+            '@typescript-eslint/eslint-plugin': '^6.21.0',
+            '@typescript-eslint/parser': '^6.21.0',
+            eslint: '^8.56.0',
+            prettier: '^3.2.4',
+            husky: '^8.0.3',
+            'lint-staged': '^15.2.0'
+        }
+    };
+    fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify(rootPackageJson, null, 2));
+    // .gitignore
+    const gitignore = `# Dependencies
 node_modules/
 .pnp
 .pnp.js
@@ -1503,40 +1255,28 @@ build/
 .cache/
 .eslintcache
 `;
-
-  fs.writeFileSync(path.join(projectPath, '.gitignore'), gitignore);
-
-  // ESLint config
-  const eslintConfig = {
-    root: true,
-    extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
-    parser: '@typescript-eslint/parser',
-    plugins: ['@typescript-eslint'],
-    ignorePatterns: ['dist', 'build', 'node_modules']
-  };
-
-  fs.writeFileSync(
-    path.join(projectPath, '.eslintrc.json'),
-    JSON.stringify(eslintConfig, null, 2)
-  );
-
-  // Prettier config
-  const prettierConfig = {
-    semi: true,
-    trailingComma: 'es5',
-    singleQuote: true,
-    printWidth: 80,
-    tabWidth: 2,
-    useTabs: false
-  };
-
-  fs.writeFileSync(
-    path.join(projectPath, '.prettierrc.json'),
-    JSON.stringify(prettierConfig, null, 2)
-  );
-
-  // README
-  const readme = `# ${projectName}
+    fs.writeFileSync(path.join(projectPath, '.gitignore'), gitignore);
+    // ESLint config
+    const eslintConfig = {
+        root: true,
+        extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
+        parser: '@typescript-eslint/parser',
+        plugins: ['@typescript-eslint'],
+        ignorePatterns: ['dist', 'build', 'node_modules']
+    };
+    fs.writeFileSync(path.join(projectPath, '.eslintrc.json'), JSON.stringify(eslintConfig, null, 2));
+    // Prettier config
+    const prettierConfig = {
+        semi: true,
+        trailingComma: 'es5',
+        singleQuote: true,
+        printWidth: 80,
+        tabWidth: 2,
+        useTabs: false
+    };
+    fs.writeFileSync(path.join(projectPath, '.prettierrc.json'), JSON.stringify(prettierConfig, null, 2));
+    // README
+    const readme = `# ${projectName}
 
 Full-stack TypeScript application with **modular architecture**.
 
@@ -1647,11 +1387,9 @@ npm run format           # Format code
 
 MIT
 `;
-
-  fs.writeFileSync(path.join(projectPath, 'README.md'), readme);
+    fs.writeFileSync(path.join(projectPath, 'README.md'), readme);
 }
-
-main().catch((error: Error) => {
-  console.error(pc.red('\n✖ Error:'), error);
-  process.exit(1);
+main().catch((error) => {
+    console.error(pc.red('\n✖ Error:'), error);
+    process.exit(1);
 });
