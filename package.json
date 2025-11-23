@@ -1,0 +1,57 @@
+{
+  "name": "@cakki/cli",
+  "version": "1.0.0",
+  "description": "CLI tool to scaffold React + TypeScript + Node full-stack projects with modular architecture",
+  "type": "module",
+  "bin": {
+    "cakkli": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build",
+    "test": "node dist/index.js test-project"
+  },
+  "keywords": [
+    "cli",
+    "template",
+    "scaffold",
+    "react",
+    "typescript",
+    "fullstack",
+    "express",
+    "vite",
+    "boilerplate",
+    "generator",
+    "modular-architecture"
+  ],
+  "author": "John Lambert P. Asis",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/cakkli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/cakkli/issues"
+  },
+  "homepage": "https://github.com/yourusername/cakkli#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "picocolors": "^1.0.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/prompts": "^2.4.9",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
